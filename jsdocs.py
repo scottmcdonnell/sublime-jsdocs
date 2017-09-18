@@ -69,7 +69,7 @@ def getParser(view):
         return JsdocsJava(viewSettings)
     elif sourceLang == 'rust':
         return JsdocsRust(viewSettings)
-    elif sourceLang == 'ts':
+    elif sourceLang == 'ts' or sourceLang == 'tsx':
         return JsdocsTypescript(viewSettings)
     return JsdocsJavascript(viewSettings)
 
