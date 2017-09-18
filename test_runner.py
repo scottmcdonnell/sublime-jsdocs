@@ -69,6 +69,40 @@ class ViewTestCase(unittest.TestCase):
 
         self.assertEquals(expected, self.get_view_content())
 
+class TestTypeScript(ViewTestCase):
+    def get_syntax_file(self):
+        return 'Packages/TypeScript/TypeScript.tmLanguage'
+
+    def test_parameters_are_added_to_function_templates(self):
+        self.set_view_content('/**|\nfunction foo (bar: number, baz: string): boolean {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param  {number}  bar [description]',
+            ' * @param  {string}  baz [description]',
+            ' * @return {boolean}     [description]',
+            ' */',
+            'function foo (bar: number, baz: string): boolean {'
+        ])
+
+class TestTypeScriptReact(ViewTestCase):
+    def get_syntax_file(self):
+        return 'Packages/TypeScript/TypeScriptReact.tmLanguage'
+
+    def test_parameters_are_added_to_function_templates(self):
+        self.set_view_content('/**|\nfunction foo (bar: number, baz: string): boolean {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param  {number}  bar [description]',
+            ' * @param  {string}  baz [description]',
+            ' * @return {boolean}     [description]',
+            ' */',
+            'function foo (bar: number, baz: string): boolean {'
+        ])
+
 class TestJavaScript(ViewTestCase):
 
     def get_syntax_file(self):
@@ -428,9 +462,10 @@ class RunDocBlockrTests(sublime_plugin.WindowCommand):
         test_loader = unittest.TestLoader()
 
         # TODO move all test cases into tests directory and make test loader auto load testcases from the folder
-
-        suite.addTests(test_loader.loadTestsFromTestCase(TestJavaScript))
-        suite.addTests(test_loader.loadTestsFromTestCase(TestPHP))
+        suite.addTests(test_loader.loadTestsFromTestCase(TestTypeScript))
+        suite.addTests(test_loader.loadTestsFromTestCase(TestTypeScriptReact))
+        #suite.addTests(test_loader.loadTestsFromTestCase(TestJavaScript))
+        #suite.addTests(test_loader.loadTestsFromTestCase(TestPHP))
 
         # TODO toggle test verbosity
         unittest.TextTestRunner(verbosity=1).run(suite)
