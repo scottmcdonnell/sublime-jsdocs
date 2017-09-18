@@ -73,7 +73,77 @@ class TestTypeScript(ViewTestCase):
     def get_syntax_file(self):
         return 'Packages/TypeScript/TypeScript.tmLanguage'
 
+    def test_basic(self):
+        self.set_view_content("\n/**|\nbasic")
+        self.run_doc_blockr()
+        self.assertDocBlockrResult('\n/**\n * \n */\nbasic')
+
+    def test_empty_doc_blocks_are_created(self):
+        self.set_view_content('/**')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            "/**",
+            " * |CURSOR|",
+            " */"
+        ])
+
+    def test_that_function_template_is_added(self):
+        self.set_view_content('/**|\nfunction foo () {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @return {[type]} [description]',
+            ' */',
+            'function foo () {'
+        ])
+
+    def test_that_function_return_type_is_added(self):
+        self.set_view_content('/**|\nfunction foo (): boolean {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @return {boolean} [description]',
+            ' */',
+            'function foo (): boolean {'
+        ])
+
+    def test_that_function_return_void_is_not_added(self):
+        self.set_view_content('/**|\nfunction foo (): void {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' */',
+            'function foo (): void {'
+        ])
+    
+    def test_that_function_return_type_array_is_added(self):
+        self.set_view_content('/**|\nfunction foo (): Array<Bar> {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @return {Array<Bar>} [description]',
+            ' */',
+            'function foo (): Array<Bar> {'
+        ])
+
     def test_parameters_are_added_to_function_templates(self):
+        self.set_view_content('/**|\nfunction foo (bar, baz) {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param  {[type]} bar [description]',
+            ' * @param  {[type]} baz [description]',
+            ' * @return {[type]}     [description]',
+            ' */',
+            'function foo (bar, baz) {'
+        ])
+
+    def test_parameter_types_are_added_to_function_templates(self):
         self.set_view_content('/**|\nfunction foo (bar: number, baz: string): boolean {')
         self.run_doc_blockr()
         self.assertDocBlockrResult([
@@ -86,10 +156,219 @@ class TestTypeScript(ViewTestCase):
             'function foo (bar: number, baz: string): boolean {'
         ])
 
+    def test_parameter_types_are_added_to_arrow_functions(self):
+        self.set_view_content('/**|\nvar foo = (bar: number, callback: string => void): boolean => {')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param  {number}    bar [description]',
+            ' * @param  {string =>  void}        callback [description]',
+            ' * @return {boolean}       [description]',
+            ' */',
+            'var foo = (bar: number, callback: string => void): boolean => {'
+        ])
+
+    
+    def test_parameters_are_added_to_function_template_with_description_disabled(self):
+        self.set_view_content('/**|\nfunction foo (bar, baz) {')
+        self.view.settings().set('jsdocs_function_description', False)
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * @param  |SELECTION_BEGIN|{[type]}|SELECTION_END| bar [description]',
+            ' * @param  {[type]} baz [description]',
+            ' * @return {[type]}     [description]',
+            ' */',
+            'function foo (bar, baz) {'
+        ])
+
+    def test_parameters_are_added_to_function_template_with_description_disabled_and_spacers_between_sections(self):
+        self.set_view_content('/**|\nfunction foo (bar, baz) {')
+        self.view.settings().set('jsdocs_function_description', False)
+        self.view.settings().set('jsdocs_spacer_between_sections', True)
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * @param  |SELECTION_BEGIN|{[type]}|SELECTION_END| bar [description]',
+            ' * @param  {[type]} baz [description]',
+            ' *',
+            ' * @return {[type]}     [description]',
+            ' */',
+            'function foo (bar, baz) {'
+        ])
+    
+    def test_parameters_are_added_to_function_template_with_description_disabled_and_spacer_after_description_isset(self):
+        self.set_view_content('/**|\nfunction foo (bar, baz) {')
+        self.view.settings().set('jsdocs_function_description', False)
+        self.view.settings().set('jsdocs_spacer_between_sections', 'after_description')
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * @param  |SELECTION_BEGIN|{[type]}|SELECTION_END| bar [description]',
+            ' * @param  {[type]} baz [description]',
+            ' * @return {[type]}     [description]',
+            ' */',
+            'function foo (bar, baz) {'
+        ])
+    
+    def test_params_across_multiple_lines_should_be_identified(self):
+        self.set_view_content([
+            '/**|',
+            'function foo(bar: number,',
+            '             baz:number,',
+            '             quux: string',
+            '             ):ClassA {'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param  {number} bar  [description]',
+            ' * @param  {number} baz  [description]',
+            ' * @param  {string} quux [description]',
+            ' * @return {ClassA}      [description]',
+            ' */',
+            'function foo(bar: number,',
+            '             baz:number,',
+            '             quux: string',
+            '             ):ClassA {'
+        ])
+    
+    def test_vars_initialised_to_number_get_placeholders(self):
+        self.set_view_content([
+            '/**|',
+            'var foo = 1;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {Number}',
+            ' */',
+            'var foo = 1;'
+        ])
+
+    def test_vars_string_double_quotes(self):
+        self.set_view_content([
+            '/**|',
+            'var foo = "a";'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {String}',
+            ' */',
+            'var foo = "a";'
+        ])
+
+    def test_vars_string_single_quotes(self):
+        self.set_view_content([
+            '/**|',
+            'var foo = \'a\';'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {String}',
+            ' */',
+            'var foo = \'a\';'
+        ])
+
+    def test_vars_unknown_type(self):
+        self.set_view_content([
+            '/**|',
+            'var foo = bar;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {[type]}',
+            ' */',
+            'var foo = bar;'
+        ])
+
+    def test_vars_set_type_number(self):
+        self.set_view_content([
+            '/**|',
+            'var foo: number;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {number}',
+            ' */',
+            'var foo: number;'
+        ])
+
+    def test_vars_const(self):
+        self.set_view_content([
+            '/**|',
+            'const foo: String = "THIS IS A STRING";'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {String}',
+            ' */',
+            'const foo: String = "THIS IS A STRING";'
+        ])
+
+    def test_vars_let(self):
+        self.set_view_content([
+            '/**|',
+            'let foo: Bar;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {Bar}',
+            ' */',
+            'let foo: Bar;'
+        ])
+
+    def test_vars_set_type_no_space(self):
+        self.set_view_content([
+            '/**|',
+            'var foo:number;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {number}',
+            ' */',
+            'var foo:number;'
+        ])
+
+    def test_vars_set_type_class(self):
+        self.set_view_content([
+            '/**|',
+            'var foo: ClassA;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {ClassA}',
+            ' */',
+            'var foo: ClassA;'
+        ])
+
+
 class TestTypeScriptReact(ViewTestCase):
     def get_syntax_file(self):
         return 'Packages/TypeScript/TypeScriptReact.tmLanguage'
 
+    """
+    this failed until .tsx was added to the TypeScript sourceLang
+    """
     def test_parameters_are_added_to_function_templates(self):
         self.set_view_content('/**|\nfunction foo (bar: number, baz: string): boolean {')
         self.run_doc_blockr()
@@ -464,8 +743,8 @@ class RunDocBlockrTests(sublime_plugin.WindowCommand):
         # TODO move all test cases into tests directory and make test loader auto load testcases from the folder
         suite.addTests(test_loader.loadTestsFromTestCase(TestTypeScript))
         suite.addTests(test_loader.loadTestsFromTestCase(TestTypeScriptReact))
-        #suite.addTests(test_loader.loadTestsFromTestCase(TestJavaScript))
-        #suite.addTests(test_loader.loadTestsFromTestCase(TestPHP))
+        suite.addTests(test_loader.loadTestsFromTestCase(TestJavaScript))
+        suite.addTests(test_loader.loadTestsFromTestCase(TestPHP))
 
         # TODO toggle test verbosity
         unittest.TextTestRunner(verbosity=1).run(suite)

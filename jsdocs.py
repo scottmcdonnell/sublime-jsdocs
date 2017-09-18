@@ -373,6 +373,11 @@ class JsdocsParser(object):
 
     def formatVar(self, name, val, valType=None):
         out = []
+
+        #for basic test with no value or type
+        if not val and not valType:
+            return out
+
         if not valType:
             if not val or val == '':  # quick short circuit
                 valType = "[type]"
@@ -1545,28 +1550,23 @@ class JsdocsTypescript(JsdocsParser):
             # technically, they can contain all sorts of unicode, but w/e
             "varIdentifier": identifier,
             "fnIdentifier": identifier,
-            "fnOpener": 'function(?:\\s+' + identifier + ')?\\s*\\(',
+            "typeIdentifier": parametric_type_identifier,
+
+            "fnOpener": '(?:'
+                    + r'function[\s*]*(?:' + identifier + r')?\s*\('
+                    + '|'
+                    + '(?:' + identifier + r'|\(.*\)\s*=>)'
+                    + '|'
+                    + '(?:' + identifier + r'\s*\(.*\)\s*\{)'
+                    + ')',
+
             "commentCloser": " */",
             "bool": "Boolean",
-            "function": "Function",
-            "functionRE":
-                # Modifiers
-                r'(?:public|private|static)?\s*'
-                # Method name
-                + r'(?P<name>' + identifier + r')\s*'
-                # Params
-                + r'\((?P<args>.*)\)\s*'
-                # Return value
-                + r'(:\s*(?P<retval>' + parametric_type_identifier + r'))?',
-            "varRE":
-                r'((public|private|static|var)\s+)?(?P<name>' + identifier
-                + r')\s*(:\s*(?P<type>' + parametric_type_identifier
-                + r'))?(\s*=\s*(?P<val>.*?))?([;,]|$)'
+            "function": "Function"
         }
-        self.functionRE = re.compile(self.settings['functionRE'])
-        self.varRE = re.compile(self.settings['varRE'])
 
-    def parseFunction(self, line):
+    def parseFunctionOld(self, line):
+        
         line = line.strip()
         res = self.functionRE.search(line)
 
@@ -1574,6 +1574,64 @@ class JsdocsTypescript(JsdocsParser):
             return None
         group_dict = res.groupdict()
         return (group_dict["name"], group_dict["args"], group_dict["retval"])
+
+    def parseFunction(self, line):
+
+        normalFunctions = (
+            # Normal functions...
+            #   fnName = function,  fnName : function
+            r'(?:(?P<name1>' + self.settings['varIdentifier'] + r')\s*[:=]\s*)?'
+            + 'function'
+            # function fnName, function* fnName
+            + r'(?P<generator>[\s*]+)?(?P<name2>' + self.settings['fnIdentifier'] + ')?'
+            # (arg1, arg2)
+            + r'\s*\(\s*(?P<args>.*)\)'
+            # :type
+            + r'(:\s*(?P<retval>' + self.settings['typeIdentifier'] + r'))?'
+        )
+
+        arrowFunctions = (
+            # foo = 
+            r'(?:(?P<name1>' + self.settings['varIdentifier'] + r')\s*[:=]\s*)?'
+            # () => y,  x => y,  (x, y) => y,  (x = 4) => y
+            + r'(?:(?P<args>' + self.settings['varIdentifier'] + r')|\(\s*(?P<args2>.*)\))'
+            # :type
+            + r'(:\s*(?P<retval>' + self.settings['typeIdentifier'] + r'))?'
+            # arrow
+            + r'\s*=>'
+        )
+
+        initializerShorthand = (
+             # ES6 method initializer shorthand
+            # var person: InterfaceA = { getName() { return this.name; } }
+            r'(?P<name1>' + self.settings['varIdentifier'] 
+            + ')\s*\((?P<args>.*)\)\s*\{'
+        )
+
+        res = re.search(normalFunctions, line
+        ) or re.search(arrowFunctions, line
+        ) or re.search(initializerShorthand, line
+        )
+        if not res:
+            return None
+
+        groups = {
+            'name1': '',
+            'name2': '',
+            'generator': '',
+            'args': '',
+            'args2': '',
+            'retval': ''
+        }
+        groups.update(res.groupdict())
+
+        # grab the name out of "name1 = function name2(foo)" preferring name1
+        generatorSymbol = '*' if (groups['generator'] or '').find('*') > -1 else ''
+        name = generatorSymbol + (groups['name1'] or groups['name2'] or '')
+        args = groups['args'] or groups['args2'] or ''
+        retval = groups['retval'] or ''
+
+        return (name, args, retval)
 
     def getArgType(self, arg):
         if ':' in arg:
@@ -1585,13 +1643,43 @@ class JsdocsTypescript(JsdocsParser):
             arg = arg.split(':')[0]
         return arg.strip('[ \?]')
 
+    def getArgInfo(self, arg):
+        if (re.search('^\{.*\}$', arg)):
+            subItems = splitByCommas(arg[1:-1])
+            prefix = 'options.'
+        else:
+            subItems = [arg]
+            prefix = ''
+
+        out = []
+        for subItem in subItems:
+            out.append((self.getArgType(subItem), prefix + self.getArgName(subItem)))
+
+        return out
+
     def parseVar(self, line):
-        res = self.varRE.search(line)
+        #   var foo = blah,
+        #       foo: string;
+        #       foo: Array<ClassA>;
+        #   baz.foo = blah;
+        #   var foo = blah,
+        #   baz = {
+        #        foo : blah
+        #   }
+        regex = (
+            r'(?P<name>' + self.settings['varIdentifier'] + ')'
+            # :type
+            + r'(:\s*(?P<valType>' + self.settings['typeIdentifier'] + r'))?'
+            # = value
+            + r'(\s*[=]\s*(?P<val>.*?))?(?:[;,]|$)'
+        )
+
+        res = re.search(regex, line)
         if not res:
             return None
-        val = res.group('val')
-        if val: val = val.strip()
-        return (res.group('name'), val, res.group('type'))
+
+        return (res.group('name'), res.group('val'), res.group('valType'))
+
 
     def getFunctionReturnType(self, name, retval):
         return retval if retval != 'void' else None
