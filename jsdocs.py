@@ -1541,7 +1541,7 @@ class JsdocsTypescript(JsdocsParser):
     def setupSettings(self):
         identifier = '[a-zA-Z_$][a-zA-Z_$0-9]*'
         base_type_identifier = r'%s(\.%s)*(\[\])?' % ((identifier, ) * 2)
-        parametric_type_identifier = r'%s(\s*<\s*%s(\s*,\s*%s\s*)*>)?' % ((base_type_identifier, ) * 3)
+        parametric_type_identifier = r'((\s*[|]?\s*%s(\s*<\s*%s(\s*,\s*%s\s*)*>)?)+)' % ((base_type_identifier, ) * 3)
         self.settings = {
             # curly brackets around the type information
             "curlyTypes": True,
@@ -1564,16 +1564,6 @@ class JsdocsTypescript(JsdocsParser):
             "bool": "Boolean",
             "function": "Function"
         }
-
-    def parseFunctionOld(self, line):
-        
-        line = line.strip()
-        res = self.functionRE.search(line)
-
-        if not res:
-            return None
-        group_dict = res.groupdict()
-        return (group_dict["name"], group_dict["args"], group_dict["retval"])
 
     def parseFunction(self, line):
 
@@ -1658,6 +1648,7 @@ class JsdocsTypescript(JsdocsParser):
         return out
 
     def parseVar(self, line):
+
         #   var foo = blah,
         #       foo: string;
         #       foo: Array<ClassA>;

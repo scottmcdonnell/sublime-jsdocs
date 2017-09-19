@@ -361,14 +361,54 @@ class TestTypeScript(ViewTestCase):
             'var foo: ClassA;'
         ])
 
+    def test_var_with_union_types(self):
+        self.set_view_content([
+            '/**|',
+            'var foo: ClassA | ClassB;'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @type {ClassA | ClassB}',
+            ' */',
+            'var foo: ClassA | ClassB;'
+        ])
+
+    def test_return_value_with_union_types(self):
+        self.set_view_content([
+            '/**|',
+            'function foo(): ClassA | null {'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @return {ClassA | null} [description]',
+            ' */',
+            'function foo(): ClassA | null {'
+        ])
+
+    def test_param_values_with_union_types(self):
+        self.set_view_content([
+            '/**|',
+            'function foo (input: string[] | null | Array<Foo.Bar>): void {'
+        ])
+        self.run_doc_blockr()
+        self.assertDocBlockrResult([
+            '/**',
+            ' * |SELECTION_BEGIN|[foo description]|SELECTION_END|',
+            ' * @param {string[] | null | Array<Foo.Bar>} input [description]',
+            ' */',
+            'function foo (input: string[] | null | Array<Foo.Bar>): void {'
+        ])
+
 
 class TestTypeScriptReact(ViewTestCase):
     def get_syntax_file(self):
         return 'Packages/TypeScript/TypeScriptReact.tmLanguage'
 
-    """
-    this failed until .tsx was added to the TypeScript sourceLang
-    """
+    # .tsx added to the TypeScript sourceLang
     def test_parameters_are_added_to_function_templates(self):
         self.set_view_content('/**|\nfunction foo (bar: number, baz: string): boolean {')
         self.run_doc_blockr()
@@ -381,6 +421,7 @@ class TestTypeScriptReact(ViewTestCase):
             ' */',
             'function foo (bar: number, baz: string): boolean {'
         ])
+    
 
 class TestJavaScript(ViewTestCase):
 
